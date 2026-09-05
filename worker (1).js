@@ -5,7 +5,6 @@
 //
 // Bindings مورد نیاز (در wrangler.toml تعریف شده‌اند):
 //   DB        -> D1 database
-//   BUCKET    -> R2 bucket (فایل‌های آپلودی)
 //   KV        -> KV namespace (سشن‌ها)
 //   VECTORIZE -> Vectorize index (فاز ۲ — جستجوی برداری RAG)
 //   AI        -> Workers AI binding (فاز ۲ — embedding + OCR تصویر)
@@ -197,11 +196,10 @@ async function handleDeleteFolder(request, env, user, folderId) {
     .first();
   if (!folder) return jsonResponse({ error: "پوشه یافت نشد" }, 404);
 
-  const docs = await env.DB.prepare("SELECT id, r2_key, chunk_count FROM documents WHERE folder_id = ?")
+  const docs = await env.DB.prepare("SELECT id, chunk_count FROM documents WHERE folder_id = ?")
     .bind(folderId)
     .all();
   for (const d of docs.results) {
-    if (d.r2_key) await env.BUCKET.delete(d.r2_key);
     await deleteDocumentVectors(env, d.id, d.chunk_count);
   }
   await env.DB.prepare("DELETE FROM documents WHERE folder_id = ?").bind(folderId).run();
@@ -378,9 +376,9 @@ async function handleUploadDocument(request, env, user) {
     const file = formData.get("file");
     if (!file) return jsonResponse({ error: "فایلی ارسال نشده" }, 400);
     title = title === "سند بدون عنوان" ? file.name : title;
-    r2Key = `docs/${folderId}/${id}-${file.name}`;
     const buf = await file.arrayBuffer();
-    await env.BUCKET.put(r2Key, buf);
+    // توجه: فایل خام ذخیره نمی‌شود (R2 برای این حساب در دسترس نیست)؛
+    // فقط متن استخراج‌شده در D1 نگه‌داری می‌شود که برای پاسخ‌گویی AI کافی است.
     try {
       extractedText = await extractTextFromFile(env, new File([buf], file.name), type);
     } catch (e) {
@@ -436,7 +434,6 @@ async function handleListDocuments(request, env, user, folderId) {
 async function handleDeleteDocument(request, env, user, docId) {
   const doc = await env.DB.prepare("SELECT * FROM documents WHERE id = ?").bind(docId).first();
   if (!doc) return jsonResponse({ error: "سند یافت نشد" }, 404);
-  if (doc.r2_key) await env.BUCKET.delete(doc.r2_key);
   await deleteDocumentVectors(env, doc.id, doc.chunk_count);
   await env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(docId).run();
   return jsonResponse({ ok: true });

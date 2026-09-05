@@ -18,11 +18,6 @@ binding = "DB"
 database_name = "tax-advisor-db"
 database_id = "REPLACE_WITH_YOUR_D1_ID"
 
-# --- فضای ذخیره‌سازی فایل (R2) ---
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "tax-advisor-files"
-
 # --- KV برای سشن‌ها ---
 [[kv_namespaces]]
 binding = "KV"
