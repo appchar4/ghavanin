@@ -628,7 +628,7 @@ async function callAI(env, systemPrompt, userMessage) {
   const data = await res.json();
   const text =
     data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") ||
-    "متاسفانه در حال حاضر امکان پاسخ‌گویی نیست.";
+    `[DEBUG] status=${res.status} apiKeySet=${!!apiKey} response=${JSON.stringify(data).slice(0, 500)}`;
   const tokens = data?.usageMetadata?.totalTokenCount || 0;
   return { text, tokens };
 }
