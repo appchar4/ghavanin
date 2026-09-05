@@ -32,4 +32,4 @@ ENVIRONMENT = "production"
 # --- Secrets (با دستور wrangler secret put تنظیم شوند، نه اینجا) ---
 # wrangler secret put AI_KEY
 # wrangler secret put SMS_API_URL   (اختیاری)
-# wrangler secret put SMS_API_KEY   (اختیاری)
+# wrangler secret put SMS_API_KEY   (اختیاری) 
