@@ -8,20 +8,22 @@ compatibility_flags = ["nodejs_compat"]
 binding = "AI"
 
 # --- Vectorize (فاز ۲: جستجوی برداری پایگاه دانش) ---
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "tax-advisor-index"
+# فعلاً غیرفعاله چون هنوز ایندکسش ساخته نشده. بعد از ساختنش، این سه خط رو
+# از حالت کامنت (#) در بیار.
+# [[vectorize]]
+# binding = "VECTORIZE"
+# index_name = "tax-advisor-index"
 
 # --- دیتابیس D1 ---
 [[d1_databases]]
 binding = "DB"
 database_name = "tax-advisor-db"
-database_id = "REPLACE_WITH_YOUR_D1_ID"
+database_id = "f74bd131-58f6-42a3-9a45-8c98c5faa115"
 
 # --- KV برای سشن‌ها ---
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_YOUR_KV_ID"
+id = "ac569c099a914d99b7dd670d4dc1c552"
 
 # --- متغیرهای محیطی عمومی (غیر محرمانه) ---
 [vars]
