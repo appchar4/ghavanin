@@ -8,11 +8,9 @@ compatibility_flags = ["nodejs_compat"]
 binding = "AI"
 
 # --- Vectorize (فاز ۲: جستجوی برداری پایگاه دانش) ---
-# فعلاً غیرفعاله چون هنوز ایندکسش ساخته نشده. بعد از ساختنش، این سه خط رو
-# از حالت کامنت (#) در بیار.
-# [[vectorize]]
-# binding = "VECTORIZE"
-# index_name = "tax-advisor-index"
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "tax-advisor-index"
 
 # --- دیتابیس D1 ---
 [[d1_databases]]
@@ -32,4 +30,4 @@ ENVIRONMENT = "production"
 # --- Secrets (با دستور wrangler secret put تنظیم شوند، نه اینجا) ---
 # wrangler secret put AI_KEY
 # wrangler secret put SMS_API_URL   (اختیاری)
-# wrangler secret put SMS_API_KEY   (اختیاری) 
+# wrangler secret put SMS_API_KEY   (اختیاری)
