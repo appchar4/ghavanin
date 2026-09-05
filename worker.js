@@ -612,9 +612,19 @@ const SYSTEM_PROMPT_BASE = `تو یک دستیار هوشمند مشاور ما�
 ۳. در پایان هر پاسخ، به سند/منبعی که از آن استفاده کردی اشاره کن.
 ۴. پاسخ‌ها را به زبان فارسی روان و حرفه‌ای بنویس.`;
 
+async function getConfiguredModel(env) {
+  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'ai_model'").first();
+  const value = row && row.value;
+  // مدل‌های خیلی قدیمی (که گوگل دیگر پشتیبانی نمی‌کند) را نادیده می‌گیریم
+  if (!value || value.startsWith("gemini-1.") || value.startsWith("gemini-2.0")) {
+    return "gemini-3.5-flash";
+  }
+  return value;
+}
+
 async function callAI(env, systemPrompt, userMessage) {
   const apiKey = env.AI_KEY;
-  const model = "gemini-1.5-flash";
+  const model = await getConfiguredModel(env);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
@@ -628,7 +638,7 @@ async function callAI(env, systemPrompt, userMessage) {
   const data = await res.json();
   const text =
     data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") ||
-    `[DEBUG] status=${res.status} apiKeySet=${!!apiKey} response=${JSON.stringify(data).slice(0, 500)}`;
+    `[DEBUG] model=${model} status=${res.status} apiKeySet=${!!apiKey} response=${JSON.stringify(data).slice(0, 500)}`;
   const tokens = data?.usageMetadata?.totalTokenCount || 0;
   return { text, tokens };
 }
