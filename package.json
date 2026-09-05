@@ -1,0 +1,16 @@
+{
+  "name": "tax-advisor-worker",
+  "private": true,
+  "version": "2.0.0",
+  "dependencies": {
+    "unpdf": "^0.11.0",
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  }
+}

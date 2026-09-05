@@ -1,0 +1,38 @@
+name = "tax-advisor-worker"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# --- Workers AI (فاز ۲: embedding برای RAG + OCR تصویر) ---
+[ai]
+binding = "AI"
+
+# --- Vectorize (فاز ۲: جستجوی برداری پایگاه دانش) ---
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "tax-advisor-index"
+
+# --- دیتابیس D1 ---
+[[d1_databases]]
+binding = "DB"
+database_name = "tax-advisor-db"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+# --- فضای ذخیره‌سازی فایل (R2) ---
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "tax-advisor-files"
+
+# --- KV برای سشن‌ها ---
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_YOUR_KV_ID"
+
+# --- متغیرهای محیطی عمومی (غیر محرمانه) ---
+[vars]
+ENVIRONMENT = "production"
+
+# --- Secrets (با دستور wrangler secret put تنظیم شوند، نه اینجا) ---
+# wrangler secret put AI_KEY
+# wrangler secret put SMS_API_URL   (اختیاری)
+# wrangler secret put SMS_API_KEY   (اختیاری)
