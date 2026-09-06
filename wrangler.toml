@@ -31,3 +31,4 @@ ENVIRONMENT = "production"
 # wrangler secret put AI_KEY
 # wrangler secret put SMS_API_URL   (اختیاری)
 # wrangler secret put SMS_API_KEY   (اختیاری)
+ 
