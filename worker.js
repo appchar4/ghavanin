@@ -403,11 +403,13 @@ async function handleUploadDocument(request, env, user) {
   }
 
   let chunkCount = 0;
+  let indexError = null;
   if (status !== "failed" && extractedText) {
     try {
       chunkCount = await indexDocument(env, { id, folder_id: folderId, title, extracted_text: extractedText });
     } catch (e) {
       status = "failed";
+      indexError = String(e && e.message ? e.message : e);
     }
   }
 
@@ -418,7 +420,7 @@ async function handleUploadDocument(request, env, user) {
     .bind(id, folderId, type, title, linkUrl || null, r2Key, extractedText, status, chunkCount)
     .run();
 
-  return jsonResponse({ id, title, status, chunk_count: chunkCount });
+  return jsonResponse({ id, title, status, chunk_count: chunkCount, index_error: indexError });
 }
 
 // -----------------------------------------------------
