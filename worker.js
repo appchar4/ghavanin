@@ -53,6 +53,14 @@ function requireAdmin(user) {
   return user && user.role === "admin";
 }
 
+async function canManageFolders(env, user) {
+  if (requireAdmin(user)) return true;
+  const flag = await env.DB.prepare(
+    "SELECT enabled_free FROM feature_flags WHERE key = 'user_folder_management'"
+  ).first();
+  return !!(flag && flag.enabled_free);
+}
+
 // -----------------------------------------------------
 // فاز ۳ — ویژگی‌های پولی و لایسنس
 // -----------------------------------------------------
@@ -165,6 +173,10 @@ async function handleListFolders(request, env, user) {
 async function handleCreateFolder(request, env, user) {
   const { name, description } = await request.json();
   if (!name) return jsonResponse({ error: "نام پوشه الزامی است" }, 400);
+
+  if (!(await canManageFolders(env, user))) {
+    return jsonResponse({ error: "فقط مدیر پلتفرم امکان ساخت پوشه دارد" }, 403);
+  }
 
   const canUnlimited = await hasFeatureAccess(env, user.id, "unlimited_folders");
   if (!canUnlimited) {
@@ -331,6 +343,9 @@ async function retrieveContext(env, folderId, query, topK = 6) {
 }
 
 async function handleUploadDocument(request, env, user) {
+  if (!(await canManageFolders(env, user))) {
+    return jsonResponse({ error: "فقط مدیر پلتفرم امکان مدیریت اسناد را دارد" }, 403);
+  }
   const formData = await request.formData();
   const folderId = formData.get("folder_id");
   const type = formData.get("type"); // pdf|docx|image|text|link
@@ -432,6 +447,9 @@ async function handleListDocuments(request, env, user, folderId) {
 }
 
 async function handleDeleteDocument(request, env, user, docId) {
+  if (!(await canManageFolders(env, user))) {
+    return jsonResponse({ error: "فقط مدیر پلتفرم امکان مدیریت اسناد را دارد" }, 403);
+  }
   const doc = await env.DB.prepare("SELECT * FROM documents WHERE id = ?").bind(docId).first();
   if (!doc) return jsonResponse({ error: "سند یافت نشد" }, 404);
   await deleteDocumentVectors(env, doc.id, doc.chunk_count);
@@ -467,7 +485,7 @@ async function handleMyLicenses(request, env, user) {
 // فاز ۳ — پنل مدیریت (فقط ادمین)
 // -----------------------------------------------------
 async function handleAdminDashboard(env) {
-  const [users, folders, documents, chats, messages, tokensTotal, tokensToday, activeLicenses] =
+  const [users, folders, documents, chats, messages, tokensTotal, tokensToday, activeLicenses, budgetRow] =
     await Promise.all([
       env.DB.prepare("SELECT COUNT(*) c FROM users").first(),
       env.DB.prepare("SELECT COUNT(*) c FROM folders").first(),
@@ -477,7 +495,10 @@ async function handleAdminDashboard(env) {
       env.DB.prepare("SELECT COALESCE(SUM(tokens),0) s FROM token_usage").first(),
       env.DB.prepare("SELECT COALESCE(SUM(tokens),0) s FROM token_usage WHERE created_at >= datetime('now','-1 day')").first(),
       env.DB.prepare("SELECT COUNT(*) c FROM licenses WHERE status = 'active'").first(),
+      env.DB.prepare("SELECT value FROM settings WHERE key = 'daily_free_token_budget'").first(),
     ]);
+  const budget = Number((budgetRow && budgetRow.value) || 0);
+  const remaining = Math.max(0, budget - tokensToday.s);
   return jsonResponse({
     users: users.c,
     folders: folders.c,
@@ -486,6 +507,8 @@ async function handleAdminDashboard(env) {
     messages: messages.c,
     tokens_total: tokensTotal.s,
     tokens_today: tokensToday.s,
+    daily_free_token_budget: budget,
+    tokens_remaining_today: remaining,
     active_licenses: activeLicenses.c,
   });
 }
@@ -602,6 +625,63 @@ async function handleAdminRestore(request, env) {
     }
   }
   return jsonResponse({ ok: true });
+}
+
+// -----------------------------------------------------
+// لینک‌های اشتراک‌گذاری چت عمومی (بدون نیاز به ورود کاربر)
+// -----------------------------------------------------
+async function handleAdminCreateShareLink(request, env, user) {
+  const { folder_id, requires_code, access_code } = await request.json();
+  if (!folder_id) return jsonResponse({ error: "پوشه الزامی است" }, 400);
+  const folder = await env.DB.prepare("SELECT * FROM folders WHERE id = ?").bind(folder_id).first();
+  if (!folder) return jsonResponse({ error: "پوشه یافت نشد" }, 404);
+  const id = uuid();
+  await env.DB.prepare(
+    "INSERT INTO share_links (id, folder_id, created_by, requires_code, access_code) VALUES (?, ?, ?, ?, ?)"
+  )
+    .bind(id, folder_id, user.id, requires_code ? 1 : 0, requires_code ? access_code || null : null)
+    .run();
+  return jsonResponse({ id });
+}
+
+async function handleAdminListShareLinks(env) {
+  const rows = await env.DB.prepare(
+    `SELECT s.*, f.name as folder_name FROM share_links s
+     JOIN folders f ON f.id = s.folder_id ORDER BY s.created_at DESC`
+  ).all();
+  return jsonResponse({ links: rows.results });
+}
+
+async function handleAdminRevokeShareLink(env, linkId) {
+  await env.DB.prepare("UPDATE share_links SET is_active = 0 WHERE id = ?").bind(linkId).run();
+  return jsonResponse({ ok: true });
+}
+
+async function handleGetShareLink(env, linkId) {
+  const link = await env.DB.prepare(
+    `SELECT s.id, s.requires_code, s.is_active, f.name as folder_name FROM share_links s
+     JOIN folders f ON f.id = s.folder_id WHERE s.id = ?`
+  ).bind(linkId).first();
+  if (!link || !link.is_active) return jsonResponse({ error: "این لینک معتبر نیست" }, 404);
+  return jsonResponse({ folder_name: link.folder_name, requires_code: !!link.requires_code });
+}
+
+async function handleShareChat(request, env, linkId) {
+  const link = await env.DB.prepare("SELECT * FROM share_links WHERE id = ?").bind(linkId).first();
+  if (!link || !link.is_active) return jsonResponse({ error: "این لینک معتبر نیست" }, 404);
+
+  const { message, code } = await request.json();
+  if (!message) return jsonResponse({ error: "پیام خالی است" }, 400);
+  if (link.requires_code && code !== link.access_code) {
+    return jsonResponse({ error: "کد دسترسی نادرست است" }, 403);
+  }
+
+  const { context, sources } = await retrieveContext(env, link.folder_id, message);
+  const systemPrompt = context
+    ? `${SYSTEM_PROMPT_BASE}\n\n### منابع (نتایج جستجوی مرتبط با سوال کاربر):\n${context}`
+    : `تو یک دستیار عمومی مشاور مالیاتی و قوانین کار هستی. منبع مرتبطی در پایگاه دانش پیدا نشد، پس با احتیاط پاسخ بده.`;
+  const { text } = await callAI(env, systemPrompt, message);
+  return jsonResponse({ reply: text, sources });
 }
 // (RAG واقعی با embedding در فاز ۲)
 // -----------------------------------------------------
@@ -735,6 +815,16 @@ export default {
         return await handleVerifyOtp(request, env);
       }
 
+      // مسیرهای عمومی اشتراک‌گذاری (بدون نیاز به ورود)
+      const shareGetMatch = path.match(/^\/api\/share\/([^/]+)$/);
+      if (shareGetMatch && request.method === "GET") {
+        return await handleGetShareLink(env, shareGetMatch[1]);
+      }
+      const shareChatMatch = path.match(/^\/api\/share\/([^/]+)\/chat$/);
+      if (shareChatMatch && request.method === "POST") {
+        return await handleShareChat(request, env, shareChatMatch[1]);
+      }
+
       // مسیرهای زیر نیاز به احراز هویت دارند
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: "لطفاً وارد شوید" }, 401);
@@ -824,6 +914,16 @@ export default {
         }
         if (path === "/api/admin/restore" && request.method === "POST") {
           return await handleAdminRestore(request, env);
+        }
+        if (path === "/api/admin/share-links" && request.method === "GET") {
+          return await handleAdminListShareLinks(env);
+        }
+        if (path === "/api/admin/share-links" && request.method === "POST") {
+          return await handleAdminCreateShareLink(request, env, user);
+        }
+        const shareRevokeMatch = path.match(/^\/api\/admin\/share-links\/([^/]+)\/revoke$/);
+        if (shareRevokeMatch && request.method === "POST") {
+          return await handleAdminRevokeShareLink(env, shareRevokeMatch[1]);
         }
         return jsonResponse({ error: "مسیر مدیریت یافت نشد" }, 404);
       }
