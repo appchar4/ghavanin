@@ -323,7 +323,10 @@ async function indexDocument(env, doc) {
 async function deleteDocumentVectors(env, docId, chunkCount) {
   if (!chunkCount) return;
   const ids = Array.from({ length: chunkCount }, (_, i) => `${docId}-${i}`);
-  await env.VECTORIZE.deleteByIds(ids);
+  const BATCH_SIZE = 100; // محدودیت Vectorize: حداکثر ۱۰۰ آیدی در هر درخواست حذف
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    await env.VECTORIZE.deleteByIds(ids.slice(i, i + BATCH_SIZE));
+  }
 }
 
 async function retrieveContext(env, folderId, query, topK = 6) {
